@@ -1,11 +1,11 @@
 
-all: $(PROJ).rpt $(PROJ).bin
+all: $(PROJ).bin
 
-%.blif: %.v $(ADD_SRC) $(ADD_DEPS)
-	yosys -ql $*.log $(if $(USE_ARACHNEPNR),-DUSE_ARACHNEPNR) -p 'synth_ice40 -top top -blif $@' $< $(ADD_SRC)
+%.blif: %$(TOP_V_SUFFIX).v $(ADD_SRC) $(ADD_DEPS)
+	yosys -ql $*.log $(if $(USE_ARACHNEPNR),-DUSE_ARACHNEPNR) -p 'synth_ice40 -top top -blif $@' $(YOSYS_READ_ARGS) $< $(ADD_SRC)
 
-%.json: %.v $(ADD_SRC) $(ADD_DEPS)
-	yosys -ql $*.log $(if $(USE_ARACHNEPNR),-DUSE_ARACHNEPNR) -p 'synth_ice40 -top top -json $@' $< $(ADD_SRC)
+%.json: %$(TOP_V_SUFFIX).v $(ADD_SRC) $(ADD_DEPS)
+	yosys -ql $*.log $(if $(USE_ARACHNEPNR),-DUSE_ARACHNEPNR) -p 'synth_ice40 -top top -json $@' $(YOSYS_READ_ARGS) $< $(ADD_SRC)
 
 ifeq ($(USE_ARACHNEPNR),)
 %.asc: $(PIN_DEF) %.json
@@ -15,14 +15,10 @@ else
 	arachne-pnr -d $(subst up,,$(subst hx,,$(subst lp,,$(DEVICE)))) $(if $(PACKAGE),-P $(PACKAGE)) -o $@ -p $^
 endif
 
-
 %.bin: %.asc
 	icepack $< $@
 
-%.rpt: %.asc
-	icetime $(if $(FREQ),-c $(FREQ)) -d $(DEVICE) -mtr $@ $<
-
-%_tb: %_tb.v %.v
+%_tb: %_tb.v %$(TOP_V_SUFFIX).v
 	iverilog -g2012 -o $@ $^
 
 %_tb.vcd: %_tb
@@ -37,15 +33,31 @@ endif
 %_syntb.vcd: %_syntb
 	vvp -N $< +vcd=$@
 
+ifeq ($(MAKECMDGOALS), prog)
 prog: $(PROJ).bin
+ifeq ($(PROG),iceprog)
 	iceprog $<
+else ifeq ($(PROG), dfu)
+	dfu-util -a 0 -D $< -R
+else
+$(error The PROG setting is not correct, choose either "iceprog" or "dfu")
+endif
+endif
 
+ifeq ($(MAKECMDGOALS), sudo-prog)
 sudo-prog: $(PROJ).bin
 	@echo 'Executing prog as root!!!'
+ifeq ($(PROG),iceprog)
 	sudo iceprog $<
+else ifeq ($(PROG), dfu)
+	sudo dfu-util -a 0 -D $< -R
+else
+$(error The PROG setting is not correct, choose either "iceprog" or "dfu")
+endif
+endif
 
 clean:
-	rm -f $(PROJ).blif $(PROJ).asc $(PROJ).rpt $(PROJ).bin $(PROJ).json $(PROJ).log $(ADD_CLEAN)
+	rm -f $(PROJ).blif $(PROJ).asc $(PROJ).bin $(PROJ).json $(PROJ).log $(ADD_CLEAN)
 
 .SECONDARY:
 .PHONY: all prog clean

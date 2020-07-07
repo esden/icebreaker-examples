@@ -1,8 +1,7 @@
 PROJ = blink_count_shift
 
-PIN_DEF = ../icebreaker.pcf
-DEVICE = up5k
-PACKAGE = sg48
-FREQ = 13
+TOP_V_SUFFIX = -$(BOARD)
+
+include ../board.mk
 
 include ../main.mk
